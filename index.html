@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Catch the Hearts</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b0810;color:#fff;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:16px;touch-action:none;user-select:none}
+body.letter-mode{background:linear-gradient(160deg,#ffe3ea,#e9defa);font-family:Georgia,serif;color:#4a2c3a;justify-content:center;touch-action:auto;user-select:auto}
+h1{margin:6px 0;color:#ff8fb1;font-size:1.5rem}
+#hud{opacity:.85;margin-bottom:8px}
+canvas{background:linear-gradient(#150f20,#1a1128);border-radius:14px;max-width:100%;box-shadow:0 8px 24px #0006}
+#overlay{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:20px;text-align:center}
+#box{background:#fffdf8;color:#4a2c3a;border-radius:18px;padding:28px;max-width:420px;line-height:1.6}
+#box h2{color:#e8587a;margin-top:0}
+#box svg{width:84px;height:84px;display:block;margin:0 auto 4px}
+button{font:inherit;background:#e8587a;color:#fff;border:0;padding:10px 22px;border-radius:22px;cursor:pointer}
+#game{display:flex;flex-direction:column;align-items:center}
+#start{display:none;text-align:center}
+#env{cursor:pointer;width:260px;height:170px;background:#f7b7c6;border-radius:8px;position:relative;box-shadow:0 10px 30px #0003;transition:.4s;margin:0 auto}
+#env:hover{transform:scale(1.05)}
+#env::before{content:"";position:absolute;inset:0;background:linear-gradient(to bottom right,transparent 49%,#f19ab0 50%) top/100% 55% no-repeat,linear-gradient(to bottom left,transparent 49%,#f19ab0 50%) top/100% 55% no-repeat;border-radius:8px}
+#env span{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);font-size:34px}
+#hint{margin-top:18px;opacity:.7}
+#letter{display:none;max-width:560px;width:92%;background:#fffdf8;padding:32px 28px;border-radius:12px;box-shadow:0 10px 30px #0003;text-align:left;line-height:1.7;min-height:260px}
+#letter h2{margin-top:0;color:#e8587a}
+#text{white-space:pre-wrap}
+.cursor{display:inline-block;width:2px;height:1em;background:#e8587a;vertical-align:-2px;animation:b 1s infinite}
+@keyframes b{50%{opacity:0}}
+#ask{display:none;margin-top:22px;text-align:center;position:relative;height:90px}
+#yes{background:#e8587a;color:#fff;font-size:1.1rem}
+#no{background:#ddd;color:#000;position:absolute;left:62%;top:0}
+#win{display:none;font-size:1.4rem;color:#e8587a;text-align:center;margin-top:10px}
+</style></head><body>
+<div id="game">
+  <h1 id="t">Catch the hearts</h1>
+  <div id="hud">Hearts: <b id="score">0</b> / <span id="goal"></span> &nbsp; Misses: <b id="miss">0</b>/5</div>
+  <canvas id="c" width="360" height="520"></canvas>
+</div>
+<div id="overlay"><div id="box">
+  <svg id="ico" viewBox="0 0 84 84" style="display:none"><rect x="14" y="30" width="56" height="38" rx="5" fill="#f7c4cf"/><rect x="22" y="18" width="40" height="34" rx="4" fill="#fde9ee"/><path d="M42 44c-6-5-9-8-9-11a5 5 0 0 1 9-2 5 5 0 0 1 9 2c0 3-3 6-9 11z" fill="#e8587a"/><path d="M14 34l28 20 28-20v30a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z" fill="#f4aebd"/></svg>
+  <h2 id="oh"></h2><p id="op"></p><button id="again">Try again</button>
+</div></div>
+<div id="start"><div id="env"><span>&#10084;&#65039;</span></div><div id="hint">Tap the envelope</div></div>
+<div id="letter">
+  <h2 id="to"></h2><div id="text"></div><span class="cursor"></span>
+  <div id="ask"><button id="yes">Yes, I forgive you</button><button id="no">No</button></div>
+  <div id="win">I've been thinking about what happened, and you deserved better from me. &#10084;&#65039;</div>
+</div>
+<script>
+// ====== EDIT THESE ======
+const GAME_NAME="Baby", LETTER_NAME="bibi", ME="your annoying little baby", GOAL=15;
+const message=`I know I messed up, and honestly I don’t even know how to say this properly, but I’m really sorry. I know I hurt you, and I hate that I’m the reason you’re feeling this way.
+
+I’m not trying to make excuses for what I did. I just want you to know that I really regret it. I keep thinking about everything, and I really don’t want to lose you because of my mistake.
+
+I know saying sorry doesn’t magically fix everything, and I understand if you’re still angry or hurt. You have every right to feel that way. I just hope you don’t give up on us yet.
+
+I know I have to try harder. I don’t want to be a loser who keeps making the same mistakes and then just says sorry. I want to actually change and show you that I can do better. I also know I need to give you more time, more attention, and make you feel that you’re important to me. I’ll try my best to make time for you and not take you for granted.
+
+I love you, and I still want you in my life. I want us to work things out, even if it takes time. I’ll prove it with my actions, not just my words.
+
+I’m really sorry, baby. I don’t want this to be the end of us. ❤️`;
+// ========================
+const cv=document.getElementById("c"),ctx=cv.getContext("2d");
+const $=id=>document.getElementById(id);
+$("goal").textContent=GOAL;$("t").textContent="Catch the hearts, "+GAME_NAME;
+let px,hearts,score,miss,running,last,won=false;
+function reset(){px=cv.width/2;hearts=[];score=0;miss=0;running=true;last=performance.now();$("overlay").style.display="none";upd();requestAnimationFrame(loop)}
+function upd(){$("score").textContent=score;$("miss").textContent=miss}
+function move(x){const r=cv.getBoundingClientRect();px=(x-r.left)*(cv.width/r.width)}
+cv.addEventListener("mousemove",e=>move(e.clientX));
+cv.addEventListener("touchmove",e=>{move(e.touches[0].clientX)},{passive:true});
+cv.addEventListener("touchstart",e=>{move(e.touches[0].clientX)},{passive:true});
+let spawn=0;
+function loop(t){
+  if(!running)return;
+  const dt=Math.min(40,t-last);last=t;spawn-=dt;
+  if(spawn<=0){hearts.push({x:20+Math.random()*(cv.width-40),y:-20,v:.12+Math.random()*.1+score*.004});spawn=650-Math.min(300,score*15)}
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.font="38px serif";ctx.textAlign="center";
+  ctx.fillText("\u{1F9FA}",px,cv.height-20);
+  for(let i=hearts.length-1;i>=0;i--){
+    const h=hearts[i];h.y+=h.v*dt;
+    ctx.fillText("\u{2764}\u{FE0F}",h.x,h.y);
+    if(h.y>cv.height-60&&Math.abs(h.x-px)<34){hearts.splice(i,1);score++;upd();if(score>=GOAL)return end(true)}
+    else if(h.y>cv.height){hearts.splice(i,1);miss++;upd();if(miss>=5)return end(false)}
+  }
+  requestAnimationFrame(loop);
+}
+function end(win){
+  running=false;won=win;$("overlay").style.display="flex";
+  $("ico").style.display=win?"block":"none";
+  if(win){
+    $("oh").textContent="You have a letter!";
+    $("op").innerHTML="There's a letter waiting for <b>you</b> from your special someone.";
+    $("again").textContent="Open Letter";
+  }else{
+    $("oh").textContent="So close!";
+    $("op").textContent="Try once more. There is a letter waiting for you.";
+    $("again").textContent="Try again";
+  }
+}
+$("again").onclick=()=>{ if(won) openLetter(); else reset(); };
+
+function openLetter(){
+  $("overlay").style.display="none";$("game").style.display="none";
+  document.body.classList.add("letter-mode");
+  $("start").style.display="block";
+}
+$("env").onclick=()=>{
+  $("start").style.display="none";$("letter").style.display="block";
+  $("to").textContent="Dear "+LETTER_NAME+",";
+  let i=0;const t=$("text");
+  const iv=setInterval(()=>{
+    i+=2;t.textContent=message.slice(0,i);
+    if(i>=message.length){clearInterval(iv);t.textContent=message+"\n\n— "+ME;$("ask").style.display="block";document.querySelector(".cursor").style.display="none"}
+  },30);
+}
+const no=$("no"),ask=$("ask");
+function dodge(){
+  const w=ask.clientWidth-no.offsetWidth,h=ask.clientHeight-no.offsetHeight;
+  no.style.left=Math.random()*w+"px";no.style.top=Math.random()*h+"px";
+}
+no.addEventListener("mouseenter",dodge);
+no.addEventListener("touchstart",e=>{e.preventDefault();dodge()});
+no.addEventListener("click",dodge);
+$("yes").onclick=()=>{ask.style.display="none";$("win").style.display="block"};
+reset();
+</script></body></html>
